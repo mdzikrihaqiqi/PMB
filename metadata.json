@@ -1,0 +1,8 @@
+{
+  "name": "Sistem Informasi Data Mahasiswa FEBI UNSUR",
+  "description": "Platform manajemen data mahasiswa, analitik akademik, import/export Excel, laporan institusional, dan audit akses berbasis peran untuk Fakultas Ekonomi dan Bisnis Islam Universitas Suryakancana.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

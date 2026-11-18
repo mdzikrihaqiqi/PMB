@@ -1,0 +1,335 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core helper primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedSuperAdmin() {
+      return isEmailVerified() && request.auth.token.email.lower() == 'alfanwira@gmail.com';
+    }
+
+    function profileExists() {
+      return exists(/databases/$(database)/documents/profiles/$(request.auth.uid));
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+    }
+
+    function isActiveMember() {
+      return isEmailVerified() && profileExists() && myProfile().is_active == true;
+    }
+
+    function hasRole(allowedRoles) {
+      return isActiveMember() && (myProfile().role in allowedRoles);
+    }
+
+    function isSuperAdmin() {
+      return isBootstrappedSuperAdmin() || hasRole(['SUPER_ADMIN']);
+    }
+
+    function isAdminOrSuperAdmin() {
+      return isBootstrappedSuperAdmin() || hasRole(['SUPER_ADMIN', 'ADMIN']);
+    }
+
+    function isStaffRole() {
+      return isBootstrappedSuperAdmin() || hasRole(['SUPER_ADMIN', 'ADMIN', 'OPERATOR']);
+    }
+
+    function isViewerOrAbove() {
+      return isBootstrappedSuperAdmin() || hasRole(['SUPER_ADMIN', 'ADMIN', 'OPERATOR', 'VIEWER']);
+    }
+
+    function emailKey(email) {
+      return email.lower().replace('[^a-z0-9_-]', '_');
+    }
+
+    function hasMatchingInviteRole(email, role) {
+      return exists(/databases/$(database)/documents/user_invites/$(emailKey(email)))
+        && get(/databases/$(database)/documents/user_invites/$(emailKey(email))).data.role == role;
+    }
+
+    function isValidRole(role) {
+      return role in ['SUPER_ADMIN', 'ADMIN', 'OPERATOR', 'VIEWER'];
+    }
+
+    function isNullableString(val, maxLen) {
+      return val == null || (val is string && val.size() <= maxLen);
+    }
+
+    // Entity validation blueprints
+    function isValidProfile(data) {
+      return data.keys().hasAll(['uid', 'full_name', 'email', 'role', 'is_active', 'created_at', 'updated_at', 'last_login_at'])
+        && data.keys().hasOnly(['uid', 'full_name', 'email', 'role', 'is_active', 'avatar_url', 'created_at', 'updated_at', 'last_login_at'])
+        && isValidId(data.uid)
+        && data.full_name is string && data.full_name.size() >= 1 && data.full_name.size() <= 120
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && isValidRole(data.role)
+        && data.is_active is bool
+        && (!data.keys().hasAny(['avatar_url']) || isNullableString(data.avatar_url, 500))
+        && data.created_at is timestamp
+        && data.updated_at is timestamp
+        && data.last_login_at is timestamp;
+    }
+
+    function isValidInvite(data) {
+      return data.keys().hasAll(['email', 'full_name', 'role', 'created_by', 'created_at'])
+        && data.keys().hasOnly(['email', 'full_name', 'role', 'created_by', 'created_at'])
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.full_name is string && data.full_name.size() >= 1 && data.full_name.size() <= 120
+        && isValidRole(data.role)
+        && isValidId(data.created_by)
+        && data.created_at is timestamp;
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['faculty_code', 'npm', 'nama', 'prodi', 'angkatan', 'kelas', 'has_phone', 'created_by', 'updated_by', 'created_at', 'updated_at'])
+        && data.keys().hasOnly(['faculty_code', 'npm', 'nama', 'prodi', 'angkatan', 'kelas', 'asal_sekolah', 'kecamatan', 'has_phone', 'created_by', 'updated_by', 'created_at', 'updated_at'])
+        && data.faculty_code == 'FEBI_UNSUR'
+        && data.npm is string && data.npm.size() >= 4 && data.npm.size() <= 32 && data.npm.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.nama is string && data.nama.size() >= 1 && data.nama.size() <= 150
+        && data.prodi is string && data.prodi.size() >= 1 && data.prodi.size() <= 100
+        && data.angkatan is int && data.angkatan >= 2018 && data.angkatan <= 2035
+        && data.kelas is string && data.kelas.size() >= 1 && data.kelas.size() <= 40
+        && (!data.keys().hasAny(['asal_sekolah']) || isNullableString(data.asal_sekolah, 150))
+        && (!data.keys().hasAny(['kecamatan']) || isNullableString(data.kecamatan, 100))
+        && data.has_phone is bool
+        && isValidId(data.created_by)
+        && isValidId(data.updated_by)
+        && data.created_at is timestamp
+        && data.updated_at is timestamp;
+    }
+
+    function isValidStudentContact(data) {
+      return data.keys().hasAll(['faculty_code', 'npm', 'no_telp', 'updated_by', 'updated_at'])
+        && data.keys().hasOnly(['faculty_code', 'npm', 'no_telp', 'updated_by', 'updated_at'])
+        && data.faculty_code == 'FEBI_UNSUR'
+        && data.npm is string && data.npm.size() >= 4 && data.npm.size() <= 32 && data.npm.matches('^[a-zA-Z0-9_\\-]+$')
+        && isNullableString(data.no_telp, 32)
+        && isValidId(data.updated_by)
+        && data.updated_at is timestamp;
+    }
+
+    function isValidStudentHistory(data) {
+      return data.keys().hasAll(['student_id', 'npm', 'action', 'changed_fields', 'summary', 'actor_uid', 'actor_name', 'created_at'])
+        && data.keys().hasOnly(['student_id', 'npm', 'action', 'changed_fields', 'summary', 'actor_uid', 'actor_name', 'created_at'])
+        && isValidId(data.student_id)
+        && data.npm is string && data.npm.size() >= 4 && data.npm.size() <= 32 && data.npm.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.action in ['CREATE', 'UPDATE', 'IMPORT_CREATE', 'IMPORT_UPDATE']
+        && data.changed_fields is string && data.changed_fields.size() <= 500
+        && data.summary is string && data.summary.size() <= 500
+        && isValidId(data.actor_uid)
+        && data.actor_name is string && data.actor_name.size() >= 1 && data.actor_name.size() <= 120
+        && data.created_at is timestamp;
+    }
+
+    function isValidActivityLog(data) {
+      return data.keys().hasAll(['user_id', 'user_name', 'user_email', 'user_role', 'activity_type', 'description', 'created_at'])
+        && data.keys().hasOnly(['user_id', 'user_name', 'user_email', 'user_role', 'activity_type', 'description', 'target_entity', 'created_at'])
+        && isValidId(data.user_id)
+        && data.user_name is string && data.user_name.size() >= 1 && data.user_name.size() <= 120
+        && data.user_email is string && data.user_email.size() >= 3 && data.user_email.size() <= 160
+        && isValidRole(data.user_role)
+        && data.activity_type in ['LOGIN', 'LOGOUT', 'CREATE_STUDENT', 'UPDATE_STUDENT', 'DELETE_STUDENT', 'BULK_DELETE_STUDENT', 'IMPORT_EXCEL', 'EXPORT_DATA', 'USER_MANAGEMENT', 'SYSTEM_SETTINGS']
+        && data.description is string && data.description.size() >= 1 && data.description.size() <= 500
+        && (!data.keys().hasAny(['target_entity']) || isNullableString(data.target_entity, 160))
+        && data.created_at is timestamp;
+    }
+
+    function isValidSystemSetting(data) {
+      return data.keys().hasAll(['faculty_code', 'setting_key', 'updated_by', 'updated_at'])
+        && data.keys().hasOnly(['faculty_code', 'setting_key', 'faculty_name', 'university_name', 'app_name', 'app_short_name', 'address', 'max_import_mb', 'allow_upsert_by_npm', 'updated_by', 'updated_at'])
+        && data.faculty_code == 'FEBI_UNSUR'
+        && isValidId(data.setting_key)
+        && (!data.keys().hasAny(['faculty_name']) || isNullableString(data.faculty_name, 160))
+        && (!data.keys().hasAny(['university_name']) || isNullableString(data.university_name, 160))
+        && (!data.keys().hasAny(['app_name']) || isNullableString(data.app_name, 160))
+        && (!data.keys().hasAny(['app_short_name']) || isNullableString(data.app_short_name, 60))
+        && (!data.keys().hasAny(['address']) || isNullableString(data.address, 250))
+        && (!data.keys().hasAny(['max_import_mb']) || (data.max_import_mb is int && data.max_import_mb >= 1 && data.max_import_mb <= 50))
+        && (!data.keys().hasAny(['allow_upsert_by_npm']) || data.allow_upsert_by_npm is bool)
+        && isValidId(data.updated_by)
+        && data.updated_at is timestamp;
+    }
+
+    // Health check document for SDK connectivity check
+    match /test/connection {
+      allow get: if isSignedIn();
+      allow list, write: if false;
+    }
+
+    // Profiles collection (PII isolated to owner & admins)
+    match /profiles/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdminOrSuperAdmin());
+      allow list: if isAdminOrSuperAdmin();
+      allow create: if isEmailVerified()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().email == request.auth.token.email
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time
+        && incoming().last_login_at == request.time
+        && (
+          (isBootstrappedSuperAdmin() && incoming().role == 'SUPER_ADMIN' && incoming().is_active == true)
+          || (hasMatchingInviteRole(request.auth.token.email, incoming().role) && incoming().is_active == true)
+          || (!isBootstrappedSuperAdmin() && incoming().role == 'VIEWER' && incoming().is_active == true)
+        );
+      allow update: if isEmailVerified()
+        && isValidId(userId)
+        && isValidProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().email == existing().email
+        && incoming().created_at == existing().created_at
+        && incoming().updated_at == request.time
+        && (
+          (
+            request.auth.uid == userId
+            && isActiveMember()
+            && incoming().role == existing().role
+            && incoming().is_active == existing().is_active
+            && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'avatar_url', 'last_login_at', 'updated_at'])
+          )
+          || (
+            isSuperAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'role', 'is_active', 'updated_at'])
+          )
+        );
+      allow delete: if isSuperAdmin() && isValidId(userId) && request.auth.uid != userId;
+    }
+
+    // Pre-assigned role invites managed by Super Admin
+    match /user_invites/{inviteId} {
+      allow get: if isValidId(inviteId) && (isSuperAdmin() || (isEmailVerified() && existing().email == request.auth.token.email));
+      allow list: if isSuperAdmin();
+      allow create: if isSuperAdmin()
+        && isValidId(inviteId)
+        && isValidInvite(incoming())
+        && incoming().created_by == request.auth.uid
+        && incoming().created_at == request.time;
+      allow update: if isSuperAdmin()
+        && isValidId(inviteId)
+        && isValidInvite(incoming())
+        && incoming().email == existing().email
+        && incoming().created_by == existing().created_by
+        && incoming().created_at == existing().created_at
+        && incoming().diff(existing()).affectedKeys().hasOnly(['full_name', 'role']);
+      allow delete: if isSuperAdmin() && isValidId(inviteId);
+    }
+
+    // Core academic student records (non-phone directory data)
+    match /students/{studentId} {
+      allow get: if isViewerOrAbove() && isValidId(studentId);
+      allow list: if isEmailVerified() && resource.data.faculty_code == 'FEBI_UNSUR';
+      allow create: if isStaffRole()
+        && isValidId(studentId)
+        && isValidStudent(incoming())
+        && incoming().npm == studentId
+        && incoming().created_by == request.auth.uid
+        && incoming().updated_by == request.auth.uid
+        && incoming().created_at == request.time
+        && incoming().updated_at == request.time;
+      allow update: if isStaffRole()
+        && isValidId(studentId)
+        && isValidStudent(incoming())
+        && incoming().faculty_code == existing().faculty_code
+        && incoming().npm == existing().npm
+        && incoming().created_by == existing().created_by
+        && incoming().created_at == existing().created_at
+        && incoming().updated_by == request.auth.uid
+        && incoming().updated_at == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['nama', 'prodi', 'angkatan', 'kelas', 'asal_sekolah', 'kecamatan', 'has_phone', 'updated_by', 'updated_at']);
+      allow delete: if isAdminOrSuperAdmin() && isValidId(studentId);
+    }
+
+    // Isolated PII phone numbers (blocked for VIEWER)
+    match /student_contacts/{studentId} {
+      allow get: if isStaffRole() && isValidId(studentId);
+      allow list: if isStaffRole() && resource.data.faculty_code == 'FEBI_UNSUR';
+      allow create: if isStaffRole()
+        && isValidId(studentId)
+        && isValidStudentContact(incoming())
+        && incoming().npm == studentId
+        && incoming().updated_by == request.auth.uid
+        && incoming().updated_at == request.time;
+      allow update: if isStaffRole()
+        && isValidId(studentId)
+        && isValidStudentContact(incoming())
+        && incoming().faculty_code == existing().faculty_code
+        && incoming().npm == existing().npm
+        && incoming().updated_by == request.auth.uid
+        && incoming().updated_at == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['no_telp', 'updated_by', 'updated_at']);
+      allow delete: if isAdminOrSuperAdmin() && isValidId(studentId);
+    }
+
+    // Student modification history (append-only)
+    match /student_history/{historyId} {
+      allow get: if isStaffRole() && isValidId(historyId);
+      allow list: if isStaffRole();
+      allow create: if isStaffRole()
+        && isValidId(historyId)
+        && isValidStudentHistory(incoming())
+        && incoming().actor_uid == request.auth.uid
+        && incoming().created_at == request.time;
+      allow update, delete: if false;
+    }
+
+    // System activity audit logs (append-only, admin read)
+    match /activity_logs/{logId} {
+      allow get: if isAdminOrSuperAdmin() && isValidId(logId);
+      allow list: if isAdminOrSuperAdmin();
+      allow create: if isActiveMember()
+        && isValidId(logId)
+        && isValidActivityLog(incoming())
+        && incoming().user_id == request.auth.uid
+        && incoming().created_at == request.time;
+      allow update, delete: if false;
+    }
+
+    // System settings (Super Admin write)
+    match /system_settings/{settingKey} {
+      allow get: if isViewerOrAbove() && isValidId(settingKey);
+      allow list: if isEmailVerified() && resource.data.faculty_code == 'FEBI_UNSUR';
+      allow create: if isSuperAdmin()
+        && isValidId(settingKey)
+        && isValidSystemSetting(incoming())
+        && incoming().setting_key == settingKey
+        && incoming().updated_by == request.auth.uid
+        && incoming().updated_at == request.time;
+      allow update: if isSuperAdmin()
+        && isValidId(settingKey)
+        && isValidSystemSetting(incoming())
+        && incoming().faculty_code == existing().faculty_code
+        && incoming().setting_key == existing().setting_key
+        && incoming().updated_by == request.auth.uid
+        && incoming().updated_at == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['faculty_name', 'university_name', 'app_name', 'app_short_name', 'address', 'max_import_mb', 'allow_upsert_by_npm', 'updated_by', 'updated_at']);
+      allow delete: if false;
+    }
+  }
+}

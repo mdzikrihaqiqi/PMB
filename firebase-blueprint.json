@@ -1,0 +1,163 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil pengguna sistem dengan peran RBAC untuk FEBI UNSUR.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "full_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "OPERATOR", "VIEWER"] },
+        "is_active": { "type": "boolean" },
+        "avatar_url": { "type": "string", "maxLength": 500 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "last_login_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "full_name", "email", "role", "is_active", "created_at", "updated_at", "last_login_at"]
+    },
+    "UserInvite": {
+      "title": "UserInvite",
+      "description": "Undangan peran pengguna berdasarkan email yang didaftarkan oleh Super Admin.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "full_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "OPERATOR", "VIEWER"] },
+        "created_by": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "full_name", "role", "created_by", "created_at"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Data akademik inti mahasiswa FEBI UNSUR (non-PII kontak).",
+      "type": "object",
+      "properties": {
+        "faculty_code": { "type": "string", "enum": ["FEBI_UNSUR"] },
+        "npm": { "type": "string", "minLength": 4, "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nama": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "prodi": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "angkatan": { "type": "integer" },
+        "kelas": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "asal_sekolah": { "type": "string", "maxLength": 150 },
+        "kecamatan": { "type": "string", "maxLength": 100 },
+        "has_phone": { "type": "boolean" },
+        "created_by": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "updated_by": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["faculty_code", "npm", "nama", "prodi", "angkatan", "kelas", "has_phone", "created_by", "updated_by", "created_at", "updated_at"]
+    },
+    "StudentContact": {
+      "title": "StudentContact",
+      "description": "Data kontak sensitif (PII) nomor telepon mahasiswa, terisolasi dari peran Viewer.",
+      "type": "object",
+      "properties": {
+        "faculty_code": { "type": "string", "enum": ["FEBI_UNSUR"] },
+        "npm": { "type": "string", "minLength": 4, "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "no_telp": { "type": "string", "maxLength": 32 },
+        "updated_by": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["faculty_code", "npm", "no_telp", "updated_by", "updated_at"]
+    },
+    "StudentHistory": {
+      "title": "StudentHistory",
+      "description": "Riwayat perubahan data mahasiswa untuk audit tingkat rekaman.",
+      "type": "object",
+      "properties": {
+        "student_id": { "type": "string", "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "npm": { "type": "string", "maxLength": 32, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "action": { "type": "string", "enum": ["CREATE", "UPDATE", "IMPORT_CREATE", "IMPORT_UPDATE"] },
+        "changed_fields": { "type": "string", "maxLength": 500 },
+        "summary": { "type": "string", "maxLength": 500 },
+        "actor_uid": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actor_name": { "type": "string", "maxLength": 120 },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["student_id", "npm", "action", "changed_fields", "summary", "actor_uid", "actor_name", "created_at"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit log aktivitas sistem yang bersifat append-only.",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "user_name": { "type": "string", "maxLength": 120 },
+        "user_email": { "type": "string", "maxLength": 160 },
+        "user_role": { "type": "string", "enum": ["SUPER_ADMIN", "ADMIN", "OPERATOR", "VIEWER"] },
+        "activity_type": {
+          "type": "string",
+          "enum": [
+            "LOGIN",
+            "LOGOUT",
+            "CREATE_STUDENT",
+            "UPDATE_STUDENT",
+            "DELETE_STUDENT",
+            "BULK_DELETE_STUDENT",
+            "IMPORT_EXCEL",
+            "EXPORT_DATA",
+            "USER_MANAGEMENT",
+            "SYSTEM_SETTINGS"
+          ]
+        },
+        "description": { "type": "string", "maxLength": 500 },
+        "target_entity": { "type": "string", "maxLength": 160 },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["user_id", "user_name", "user_email", "user_role", "activity_type", "description", "created_at"]
+    },
+    "SystemSetting": {
+      "title": "SystemSetting",
+      "description": "Konfigurasi identitas fakultas dan parameter sistem.",
+      "type": "object",
+      "properties": {
+        "faculty_code": { "type": "string", "enum": ["FEBI_UNSUR"] },
+        "setting_key": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "faculty_name": { "type": "string", "maxLength": 160 },
+        "university_name": { "type": "string", "maxLength": 160 },
+        "app_name": { "type": "string", "maxLength": 160 },
+        "app_short_name": { "type": "string", "maxLength": 60 },
+        "address": { "type": "string", "maxLength": 250 },
+        "max_import_mb": { "type": "integer" },
+        "allow_upsert_by_npm": { "type": "boolean" },
+        "updated_by": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["faculty_code", "setting_key", "updated_by", "updated_at"]
+    }
+  },
+  "firestore": {
+    "/profiles/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Profil pengguna terautentikasi beserta peran RBAC."
+    },
+    "/user_invites/{inviteId}": {
+      "schema": { "$ref": "#/entities/UserInvite" },
+      "description": "Daftar undangan peran oleh Super Admin."
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Rekaman data mahasiswa FEBI UNSUR dengan document ID berbasis NPM."
+    },
+    "/student_contacts/{studentId}": {
+      "schema": { "$ref": "#/entities/StudentContact" },
+      "description": "Rekaman terisolasi untuk nomor telepon mahasiswa (hanya Operator/Admin/Super Admin)."
+    },
+    "/student_history/{historyId}": {
+      "schema": { "$ref": "#/entities/StudentHistory" },
+      "description": "Riwayat perubahan data mahasiswa."
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Log audit sistem."
+    },
+    "/system_settings/{settingKey}": {
+      "schema": { "$ref": "#/entities/SystemSetting" },
+      "description": "Pengaturan identitas dan konfigurasi sistem."
+    }
+  }
+}
